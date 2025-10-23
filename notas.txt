@@ -1,0 +1,1 @@
+python3 plot.py --root bead --xyz 1J05.xyz --plane XY --size 44 --dpi 300 --outfile protein_XY.png
