@@ -1,23 +1,24 @@
-# Protein 2D Projection (Residue-Colored Beads)
+# Protein 2D Projection
 
-This repository provides a small visualization utility to project a 3D protein structure stored in `.xyz` format onto a 2D plane (XY, XZ or YZ), placing a colored bead **per residue**. The beads are categorized by amino acid type (acidic, basic, polar, apolar) and drawn as transparent PNG icons.
-
-Unlike pixel-based approaches, bead size is controlled in **data units (nm)** so that it remains physically meaningful relative to the size of the protein/domain. This ensures consistent scaling when switching between different protein sizes.
+This project plots a 2D projection of a protein from an `.xyz` file, placing one colored bead per residue. The background is transparent and the bead size adapts to the size of the box.
 
 ---
 
-## ✨ Features
+## How it works
 
-- ⚛️ One bead per residue
-- 🎨 Automatic coloring by category (acid / basic / polar / apolar)
-- 📦 Transparent background (ready for overlays or figure assembly)
-- 📐 Real-size scaling in nanometers (not DPI-dependent)
-- 🔄 Choice of projection plane: XY / XZ / YZ
-- 🧭 Recentered at center-of-mass for consistent visualization
-- ✅ Works with any protein size
+- Reads `.xyz` coordinates
+- Recenters by center of mass
+- Projects onto XY / XZ / YZ plane
+- Colors each residue by category:
+  - acidic (Asp, Glu)
+  - basic (Lys, Arg, His)
+  - polar (Ser, Thr, Asn, Gln, Tyr, Cys, CysDB)
+  - apolar (Ala, Val, Leu, Ile, Pro, Phe, Trp, Met, Gly)
+- Draws a PNG bead centered on each residue
+- Bead size scales according to the box size
 
 ---
 
-## 📁 Repository structure
+## Repository structure
 
 

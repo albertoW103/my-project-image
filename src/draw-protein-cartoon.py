@@ -219,7 +219,7 @@ def main():
     
     ax.set_xlim(-box/2, box/2)
     ax.set_ylim(-box/2, box/2)
-    plt.savefig('protein.png', dpi=500, transparent=True)
+    plt.savefig('protein.png', dpi=300, transparent=True)
 
 if __name__ == "__main__":
     main()
