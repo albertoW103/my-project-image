@@ -25,7 +25,7 @@ This project plots a 2D projection of a protein from an `.xyz` file, placing one
 
 The code run as following:
 
-`python3 draw-protein-cartoon.py -xyz protein.xyz -plane XY`
+`python3 draw-protein-cartoon.py -xyz protein.xyz -plane XY -fmt svg` 
 
 
 ## Example Results

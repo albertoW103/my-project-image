@@ -133,7 +133,7 @@ def choose_axes(coords, plane):
     elif p == "YZ":
         return coords[:, [1, 2]], coords[:, 0]
     else:
-        raise ValueError("Invalid plane. Use XY, XZ or YZ.")
+        raise ValueError("Invalid plane. Use XY, XZ or YZ, in upper case")
 
 def load_icons():
     '''
@@ -189,6 +189,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-xyz", required=True, help="input .xyz file")
     ap.add_argument("-plane", default="XY", choices=["XY", "XZ", "YZ"], help="projection plane")
+    ap.add_argument("-fmt", default="png", choices=["png","svg"], help="output format")
+
     args = ap.parse_args()
     
     # read xyz file:
@@ -219,7 +221,7 @@ def main():
     
     ax.set_xlim(-box/2, box/2)
     ax.set_ylim(-box/2, box/2)
-    plt.savefig('protein.png', dpi=50, transparent=True)
+    plt.savefig(f"protein.{args.fmt}", dpi=300, transparent=True)
 
 if __name__ == "__main__":
     main()
