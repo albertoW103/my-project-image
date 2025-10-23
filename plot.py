@@ -19,84 +19,107 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 # ==========================
 # Clasificación de residuos
 # ==========================
-ACID  = {"Asp", "Glu", "D", "E"}
-BASIC = {"Lys", "Arg", "His", "K", "R", "H"}
-POLAR = {"Ser", "Thr", "Asn", "Gln", "Tyr", "Cys", "S", "T", "N", "Q", "Y", "C"}
-APOLAR= {"Ala", "Val", "Leu", "Ile", "Pro", "Phe", "Trp", "Met", "Gly",
-         "A", "V", "L", "I", "P", "F", "W", "M", "G"}
+
+# clasification of residues:
+ACID  = {"Asp", "Glu"}
+BASIC = {"Lys", "Arg", "His"}
+POLAR = {"Ser", "Thr", "Asn", "Gln", "Tyr", "Cys", "CysDB"}
+APOLAR= {"Ala", "Val", "Leu", "Ile", "Pro", "Phe", "Trp", "Met", "Gly"}
 
 ICON_FILES = {
-    "basic":  "sphere-blue.png",
-    "acid":   "sphere-red.png",
-    "polar":  "sphere-green.png",
-    "apolar": "sphere-gray.png",
+    "basic":  "sphere-basic.png",
+    "acid":   "sphere-acid.png",
+    "polar":  "sphere-polar.png",
+    "apolar": "sphere-apolar.png"
 }
 
-def normalize_residue_name(token: str) -> str:
+amino_acid_code = {
+    'A':'Ala', 'R':'Arg', 'N':'Asn', 'D':'Asp', 'C':'Cys',
+    'E':'Glu', 'Q':'Gln', 'G':'Gly', 'H':'His', 'I':'Ile',
+    'L':'Leu', 'K':'Lys', 'M':'Met', 'F':'Phe', 'P':'Pro',
+    'S':'Ser', 'T':'Thr', 'W':'Trp', 'Y':'Tyr', 'V':'Val'
+}
+
+def residue_category(residue):
     """
-    'ASP123', 'D_Nt', 'Arg', 'd' -> 'Asp', 'D', 'Arg', 'D'
-    (quita sufijos, conserva letras iniciales)
     """
-    t = token.strip()
-    if "_" in t:
-        t = t.split("_")[0]
-    # conservar sólo letras iniciales
-    i = 0
-    while i < len(t) and t[i].isalpha():
-        i += 1
-    if i > 0:
-        t_letters = t[:i]
+    if residue in ACID:
+        return "acid"
+    if residue in BASIC:
+        return "basic"
+    if residue in POLAR:
+        return "polar"
+    if residue in APOLAR:
+        return "apolar"
     else:
-        t_letters = t
-    if len(t_letters) >= 3:
-        t3 = t_letters[:3]
-        return t3[0].upper() + t3[1:].lower()
-    elif len(t_letters) == 1:
-        return t_letters.upper()
-    return t_letters
+        print('I need a cathegory')
 
-def residue_category(res3: str) -> str | None:
-    if res3 in ACID:   return "acid"
-    if res3 in BASIC:  return "basic"
-    if res3 in POLAR:  return "polar"
-    if res3 in APOLAR: return "apolar"
-    return None
-
-def residue_index(token: str) -> int | None:
+def read_xyz_file(input_filename):
     """
-    Extrae un índice numérico de residuo si está presente (p.ej. ASP123 -> 123).
-    Si no hay número, devuelve None.
     """
-    m = re.search(r'(\d+)', token)
-    return int(m.group(1)) if m else None
+    with open(input_filename, 'r') as file:
+        # number of atoms/points:
+        nu = int(file.readline().strip())
+        
+        # header line:
+        header = file.readline().rstrip("\n")
+        
+        # accumulators:
+        indices, residues, categories = [], [], []
+        
+        # read N coordinate lines:
+        xcm = ycm = zcm = 0.0           # for centre of mass
+        x_coord, y_coord, z_coord = [], [], []
+        index = 0                       # python index starts at 0
+        
+        for _ in range(nu):
+            line    = file.readline().split()
+            residue = line[0]
+            x       = float(line[1])
+            y       = float(line[2])
+            z       = float(line[3])
+            
+            # convert from one-letter with suffix to three-letter if corresponde
+            if ('_Nt' in residue) or ('_Ct' in residue):
+                residue_one_letter_code = residue.split('_')[0]
+                residue = amino_acid_code[residue_one_letter_code] 
+            
+            # get category:
+            residue_cat = residue_category(residue)
+            
+            # append all information:
+            residues.append(residue)
+            x_coord.append(x)
+            y_coord.append(y)
+            z_coord.append(z)
+            indices.append(index)
+            categories.append(residue_cat)
+            
+            # acumular centro de masa
+            xcm += x
+            ycm += y
+            zcm += z
 
-# ==========================
-# Lectura XYZ
-# ==========================
-def read_xyz(path):
-    coords, names = [], []
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        lines = f.readlines()
-
-    start = 0
-    try:
-        _ = int(lines[0].strip())  # N
-        start = 2                  # comentario
-    except Exception:
-        start = 0
-
-    for line in lines[start:]:
-        parts = line.strip().split()
-        if len(parts) < 4:
-            continue
-        name = parts[0]
-        x, y, z = map(float, parts[1:4])
-        names.append(name)
-        coords.append([x, y, z])
-
-    if not coords:
-        raise ValueError(f"No se encontraron coordenadas en {path}")
-    return np.asarray(coords, dtype=float), names
+            index += 1
+        
+        # get centre of mass:
+        xcm /= nu
+        ycm /= nu
+        zcm /= nu
+        
+        # normalize:
+        xsv = np.asarray(x_coord, dtype=float) - xcm
+        ysv = np.asarray(y_coord, dtype=float) - ycm
+        zsv = np.asarray(z_coord, dtype=float) - zcm
+        
+        # chequeo mínimo
+        if index != nu:
+            print('missing residues')
+            exit(1)
+    
+    # coords como numpy array:
+    coords = np.column_stack((xsv, ysv, zsv))
+    return indices, residues, categories, coords
 
 # ==========================
 # Proyección / plot
@@ -112,104 +135,70 @@ def choose_axes(coords, plane):
     else:
         raise ValueError("Plano inválido. Use XY, XZ o YZ.")
 
-def load_icons(icons_root: str):
+def load_icons():
+    '''
+    '''
     icons = {}
     for cat, fname in ICON_FILES.items():
-        path = os.path.join(icons_root, fname)
+        path = os.path.join("beads", fname)  # <--- acá se fija en beads/
         if not os.path.isfile(path):
-            raise FileNotFoundError(f"Falta el icono para '{cat}': {path}")
-        icons[cat] = plt.imread(path)  # PNG original SIN tinte
+            raise FileNotFoundError(f"Falta el icono: {path}")
+        icons[cat] = plt.imread(path)
     return icons
 
 def add_icon(ax, x, y, icon_rgba, size_px):
+    '''
+    size_px ahora se interpreta en UNIDADES DE DATOS (ancho del icono),
+    para que escale con la caja fija y no con píxeles de la figura.
+    '''
     hpx, wpx = icon_rgba.shape[:2]
-    zoom = float(size_px) / float(wpx)
-    oi = OffsetImage(icon_rgba, zoom=zoom)
-    ab = AnnotationBbox(oi, (x, y), frameon=False)
-    ax.add_artist(ab)
-
-def autoscale(ax, xy, pad_ratio=0.05):
-    xmin, ymin = np.min(xy, axis=0)
-    xmax, ymax = np.max(xy, axis=0)
-    dx, dy = xmax - xmin, ymax - ymin
-    if dx == 0: dx = 1.0
-    if dy == 0: dy = 1.0
-    ax.set_xlim(xmin - pad_ratio * dx, xmax + pad_ratio * dx)
-    ax.set_ylim(ymin - pad_ratio * dy, ymax + pad_ratio * dy)
-    ax.set_aspect("equal", adjustable="box")
+    aspect = hpx / float(wpx)
+    half_w = 0.5 * float(size_px)
+    half_h = half_w * aspect
+    extent = [x - half_w, x + half_w, y - half_h, y + half_h]
+    ax.imshow(icon_rgba, extent=extent, origin='upper',
+              interpolation='antialiased')
 
 # ==========================
 # MAIN
 # ==========================
 def main():
+    '''
+    '''
+    # read arguments from terminal:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--xyz", required=True, help="archivo .xyz (en el directorio actual)")
-    ap.add_argument("--icons-root", default="beads", help="carpeta con sphere-*.png")
-    ap.add_argument("--plane", default="XY", choices=["XY", "XZ", "YZ"])
-    ap.add_argument("--size", type=int, default=44, help="tamaño del icono (px)")
-    ap.add_argument("--dpi", type=int, default=300)
+    ap.add_argument("--xyz", required=True, help="file .xyz (into the current directory)")
+    ap.add_argument("--plane", default="XY", choices=["XY", "XZ", "YZ"], help="projection plane")
     ap.add_argument("--outfile", default="protein.png")
-    ap.add_argument("--order", choices=["sequence", "depth"], default="sequence",
-                    help="sequence: dibuja siguiendo el índice/residuo en orden; depth: de lejos→cerca")
     args = ap.parse_args()
-
-    # XYZ en el CWD
-    xyz_path = args.xyz
-    if not os.path.isfile(xyz_path):
-        raise FileNotFoundError(f"No se encontró el archivo XYZ en el directorio actual: {xyz_path}")
-
-    # Datos
-    coords, names = read_xyz(xyz_path)
+    
+    # read xyz file:
+    indices, residues, categories, coords = read_xyz_file(args.xyz)
     xy, depth = choose_axes(coords, args.plane)
-
-    # Categoría y (posible) índice de residuo
-    cats = []
-    rids = []
-    for nm in names:
-        cats.append(residue_category(normalize_residue_name(nm)))
-        rids.append(residue_index(nm))
-    cats = np.array(cats, dtype=object)
-    rids = np.array(rids, dtype=object)
-
-    # Orden de dibujo
-    if args.order == "sequence":
-        # 1) si hay número de residuo, ordenar por ese número (estable)
-        # 2) si no, usar el orden del archivo
-        has_idx = np.array([ri is not None for ri in rids], dtype=bool)
-        order = np.arange(len(names))
-        if has_idx.any():
-            # ordenar por rids, y mantener estabilidad para los None (quedan como en el archivo)
-            idx_with = np.where(has_idx)[0]
-            idx_without = np.where(~has_idx)[0]
-            # ordenar sólo los que tienen número
-            idx_sorted_with = idx_with[np.argsort(rids[idx_with].astype(int), kind="stable")]
-            # concatenar respetando el orden archivo de los que no tienen
-            order = np.concatenate([idx_sorted_with, idx_without], axis=0)
-        # si nadie tiene número, order ya es el del archivo
-    else:  # depth
-        order = np.argsort(depth)
-
-    # Cargar íconos originales
-    icons = load_icons(args.icons_root)
-
-    # Figura limpia
-    fig, ax = plt.subplots(figsize=(6, 6), dpi=args.dpi)
+        
+    # tamaño de esfera COMO:
+    box     = 10.0
+    size_px =  0.45
+    #size_px = 0.10 * (40.0 / box)
+    
+    # get icons:
+    icons = load_icons()
+    
+    # plot:
+    fig, ax = plt.subplots(figsize=(6, 6), dpi=300)
     ax.axis("off")
     fig.patch.set_alpha(0.0)
     ax.set_facecolor((1, 1, 1, 0))
-
-    # Dibujo encadenado: UNO POR UNO siguiendo 'order'
-    for i in order:
-        cat = cats[i]
-        if cat is None:
-            # si no se reconoce la categoría, usar apolar por defecto
-            cat = "apolar"
-        icon = icons[cat]
-        add_icon(ax, xy[i, 0], xy[i, 1], icon, size_px=args.size)
-
-    autoscale(ax, xy, pad_ratio=0.05)
-    plt.savefig(args.outfile, dpi=args.dpi, transparent=True, bbox_inches="tight", pad_inches=0)
-    print(f"[OK] Guardado: {args.outfile}")
+    
+    # plot in sequence order:
+    for idx in indices:
+        residue_cat = categories[idx]   # select cathegory
+        icon = icons[residue_cat]       # select icon
+        add_icon(ax, xy[idx, 0], xy[idx, 1], icon, size_px=size_px)  # add icon
+    
+    ax.set_xlim(-box/2, box/2)
+    ax.set_ylim(-box/2, box/2)
+    plt.savefig(args.outfile, dpi=300, transparent=True)
 
 if __name__ == "__main__":
     main()
