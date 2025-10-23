@@ -19,13 +19,24 @@ This project plots a 2D projection of a protein from an `.xyz` file, placing one
 
 ---
 
+
+
+
+
 The code run as following:
 
-`python3 draw-protein-cartoon.py --xyz protein.xyz --plane
+`python3 draw-protein-cartoon.py -xyz protein.xyz -plane XY`
 
 
 ## Example Results
 
-<p align="center"> <img src="figures/protein1.png" alt="BSA" width="45%"/> <img src="figures/protein2.png" alt="2D5" width="45%"/> </p>
+<p align="center"> <img src="figures/protein_4F5S.png" alt="BSA" width="45%"/> <img src="figures/protein_1J05.png" alt="2D5" width="45%"/> </p>
+
+**Figure 1.** Coarce graned of proteins BSA and 2D5.
+
+
+
+
+
 
 
