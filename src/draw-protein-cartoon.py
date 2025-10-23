@@ -2,9 +2,8 @@
 # -*- coding: utf-8 -*-
 
 """
-Proyección 2D de un archivo .xyz colocando una imagen PNG por residuo
-con color por categoría (basic, acid, polar, apolar), FONDO transparente,
-y ORDEN DE DIBUJO encadenado por secuencia (cada residuo se dibuja encima del anterior).
+2D projection of a .xyz file placing a PNG icon per residue category
+with transparent background and ordered drawing in sequence order.
 """
 
 import argparse
@@ -17,21 +16,14 @@ import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 # ==========================
-# Clasificación de residuos
+# Residue classification
 # ==========================
 
-# clasification of residues:
+# categories of residues:
 ACID  = {"Asp", "Glu"}
 BASIC = {"Lys", "Arg", "His"}
 POLAR = {"Ser", "Thr", "Asn", "Gln", "Tyr", "Cys", "CysDB"}
 APOLAR= {"Ala", "Val", "Leu", "Ile", "Pro", "Phe", "Trp", "Met", "Gly"}
-
-ICON_FILES = {
-    "basic":  "sphere-basic.png",
-    "acid":   "sphere-acid.png",
-    "polar":  "sphere-polar.png",
-    "apolar": "sphere-apolar.png"
-}
 
 amino_acid_code = {
     'A':'Ala', 'R':'Arg', 'N':'Asn', 'D':'Asp', 'C':'Cys',
@@ -42,6 +34,8 @@ amino_acid_code = {
 
 def residue_category(residue):
     """
+    Returns the residue category (acid, basic, polar or apolar)
+    according to the dictionaries defined above.
     """
     if residue in ACID:
         return "acid"
@@ -52,25 +46,28 @@ def residue_category(residue):
     if residue in APOLAR:
         return "apolar"
     else:
-        print('I need a cathegory')
+        print('I need a category')
 
 def read_xyz_file(input_filename):
     """
+    Reads a .xyz file, extracts residue names and coordinates,
+    and returns indices, residue categories and coordinates
+    (recentred at the center of mass).
     """
     with open(input_filename, 'r') as file:
         # number of atoms/points:
         nu = int(file.readline().strip())
         
-        # header line:
+        # read header (ignored content, but keeps file format)
         header = file.readline().rstrip("\n")
         
         # accumulators:
         indices, residues, categories = [], [], []
         
-        # read N coordinate lines:
-        xcm = ycm = zcm = 0.0           # for centre of mass
+        # read coordinate lines:
+        xcm = ycm = zcm = 0.0               # centre of mass accumulators
         x_coord, y_coord, z_coord = [], [], []
-        index = 0                       # python index starts at 0
+        index = 0
         
         for _ in range(nu):
             line    = file.readline().split()
@@ -79,15 +76,15 @@ def read_xyz_file(input_filename):
             y       = float(line[2])
             z       = float(line[3])
             
-            # convert from one-letter with suffix to three-letter if corresponde
+            # convert one-letter + suffix to 3-letter name when necessary
             if ('_Nt' in residue) or ('_Ct' in residue):
                 residue_one_letter_code = residue.split('_')[0]
                 residue = amino_acid_code[residue_one_letter_code] 
             
-            # get category:
+            # classify residue
             residue_cat = residue_category(residue)
             
-            # append all information:
+            # append:
             residues.append(residue)
             x_coord.append(x)
             y_coord.append(y)
@@ -95,36 +92,39 @@ def read_xyz_file(input_filename):
             indices.append(index)
             categories.append(residue_cat)
             
-            # acumular centro de masa
+            # accumulate for the center of mass
             xcm += x
             ycm += y
             zcm += z
 
             index += 1
         
-        # get centre of mass:
+        # compute center of mass:
         xcm /= nu
         ycm /= nu
         zcm /= nu
         
-        # normalize:
+        # recenter coords:
         xsv = np.asarray(x_coord, dtype=float) - xcm
         ysv = np.asarray(y_coord, dtype=float) - ycm
         zsv = np.asarray(z_coord, dtype=float) - zcm
         
-        # chequeo mínimo
+        # quick consistency check
         if index != nu:
             print('missing residues')
             exit(1)
     
-    # coords como numpy array:
+    # pack in numpy array:
     coords = np.column_stack((xsv, ysv, zsv))
     return indices, residues, categories, coords
 
 # ==========================
-# Proyección / plot
+# Projection utilities
 # ==========================
 def choose_axes(coords, plane):
+    """
+    Reorders the coordinate axes according to the selected projection plane (XY, XZ or YZ).
+    """
     p = plane.upper()
     if p == "XY":
         return coords[:, [0, 1]], coords[:, 2]
@@ -133,72 +133,93 @@ def choose_axes(coords, plane):
     elif p == "YZ":
         return coords[:, [1, 2]], coords[:, 0]
     else:
-        raise ValueError("Plano inválido. Use XY, XZ o YZ.")
+        raise ValueError("Invalid plane. Use XY, XZ or YZ.")
 
 def load_icons():
     '''
+    Loads the PNG icons for each residue category and returns a dictionary
+    mapping category -> image array.
     '''
+    icon_files = {
+        "basic":  "sphere-basic.png",
+        "acid":   "sphere-acid.png",
+        "polar":  "sphere-polar.png",
+        "apolar": "sphere-apolar.png"
+    }
+
     icons = {}
-    for cat, fname in ICON_FILES.items():
-        path = os.path.join("beads", fname)  # <--- acá se fija en beads/
-        if not os.path.isfile(path):
-            raise FileNotFoundError(f"Falta el icono: {path}")
-        icons[cat] = plt.imread(path)
+    for category, filename in icon_files.items():
+        path = os.path.join("../beads", filename)
+        icons[category] = plt.imread(path)
     return icons
 
-def add_icon(ax, x, y, icon_rgba, size_px):
-    '''
-    size_px ahora se interpreta en UNIDADES DE DATOS (ancho del icono),
-    para que escale con la caja fija y no con píxeles de la figura.
-    '''
+def add_icon(ax, x, y, icon_rgba, size_data, zorder=0):
+    """
+    Draws the icon centered at (x, y) as a sprite using annotation,
+    scaling the icon according to the desired size in data units.
+    """
+    # original PNG width in pixels
     hpx, wpx = icon_rgba.shape[:2]
-    aspect = hpx / float(wpx)
-    half_w = 0.5 * float(size_px)
-    half_h = half_w * aspect
-    extent = [x - half_w, x + half_w, y - half_h, y + half_h]
-    ax.imshow(icon_rgba, extent=extent, origin='upper',
-              interpolation='antialiased')
+
+    # compute how many display pixels correspond to `size_data` data units
+    p0 = ax.transData.transform((x, y))
+    p1 = ax.transData.transform((x + float(size_data), y))
+    px_target = abs(p1[0] - p0[0])
+
+    # compute zoom factor
+    zoom = (px_target / float(wpx)) if wpx > 0 else 1.0
+
+    oi = OffsetImage(icon_rgba, zoom=zoom)
+    ab = AnnotationBbox(oi, (x, y),
+                        xycoords='data',
+                        frameon=False,
+                        box_alignment=(0.5, 0.5))
+    ab.set_zorder(zorder)
+    ax.add_artist(ab)
 
 # ==========================
-# MAIN
+# MAIN PROGRAM
 # ==========================
 def main():
     '''
+    Main driver function: parses arguments, reads xyz, projects
+    and draws residue category icons on a fixed-size box.
     '''
     # read arguments from terminal:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--xyz", required=True, help="file .xyz (into the current directory)")
-    ap.add_argument("--plane", default="XY", choices=["XY", "XZ", "YZ"], help="projection plane")
-    ap.add_argument("--outfile", default="protein.png")
+    ap.add_argument("-xyz", required=True, help="input .xyz file")
+    ap.add_argument("-plane", default="XY", choices=["XY", "XZ", "YZ"], help="projection plane")
     args = ap.parse_args()
     
     # read xyz file:
     indices, residues, categories, coords = read_xyz_file(args.xyz)
     xy, depth = choose_axes(coords, args.plane)
-        
-    # tamaño de esfera COMO:
-    box     = 10.0
-    size_px =  0.45
-    #size_px = 0.10 * (40.0 / box)
     
-    # get icons:
+    # sphere size relative to the chosen box size:
+    REF_BOX_NM     = 10.0
+    REF_SPHERE_NM  = 0.03
+    
+    box       = 10.0                               # [default] in nm
+    size_data = REF_SPHERE_NM * (REF_BOX_NM / box) # [default] in nm
+    
+    # load icons:
     icons = load_icons()
     
-    # plot:
-    fig, ax = plt.subplots(figsize=(6, 6), dpi=300)
+    # create figure:
+    fig, ax = plt.subplots(figsize=(10, 10))  # lienzo rectangular
     ax.axis("off")
-    fig.patch.set_alpha(0.0)
-    ax.set_facecolor((1, 1, 1, 0))
+    fig.patch.set_alpha(0.0)          # make background fully transparent
+    ax.set_facecolor((1, 1, 1, 0))    # make background fully transparent
     
-    # plot in sequence order:
+    # plot each residue icon in sequence order:
     for idx in indices:
-        residue_cat = categories[idx]   # select cathegory
-        icon = icons[residue_cat]       # select icon
-        add_icon(ax, xy[idx, 0], xy[idx, 1], icon, size_px=size_px)  # add icon
+        residue_cat = categories[idx]
+        icon = icons[residue_cat]
+        add_icon(ax, xy[idx, 0], xy[idx, 1], icon, size_data, zorder=10+idx)
     
     ax.set_xlim(-box/2, box/2)
     ax.set_ylim(-box/2, box/2)
-    plt.savefig(args.outfile, dpi=300, transparent=True)
+    plt.savefig('protein.png', dpi=500, transparent=True)
 
 if __name__ == "__main__":
     main()
