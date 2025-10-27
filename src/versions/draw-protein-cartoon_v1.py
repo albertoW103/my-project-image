@@ -161,7 +161,7 @@ def add_icon(ax, x, y, icon_rgba, size_data, zorder=0):
     # original PNG width in pixels
     hpx, wpx = icon_rgba.shape[:2]
 
-    # compute how many display pixels correspond to `size_data` data units
+    # compute how many display pixels correspond to size_data data units
     p0 = ax.transData.transform((x, y))
     p1 = ax.transData.transform((x + float(size_data), y))
     px_target = abs(p1[0] - p0[0])
@@ -226,3 +226,7 @@ def main():
 if __name__ == "__main__":
     main()
 
+
+
+
+    
